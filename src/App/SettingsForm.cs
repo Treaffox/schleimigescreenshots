@@ -1,0 +1,100 @@
+using SchleimigeScreenshots.Core;
+
+namespace SchleimigeScreenshots;
+
+internal sealed class SettingsForm : Form
+{
+    private readonly HotkeyBox _hotkey = new() { Dock = DockStyle.Fill };
+    private readonly CheckBox _clipboard = new() { Text = "Ergebnis in die Zwischenablage kopieren", AutoSize = true };
+    private readonly CheckBox _browser = new() { Text = "Im Standardbrowser öffnen", AutoSize = true };
+    private readonly CheckBox _search = new() { Text = "Kein Link (z. B. Barcode-Nummer): per Websuche öffnen", AutoSize = true };
+    private readonly TextBox _template = new() { Dock = DockStyle.Fill };
+    private readonly CheckBox _notify = new() { Text = "Benachrichtigung anzeigen", AutoSize = true };
+    private readonly CheckBox _autostart = new() { Text = "Mit Windows starten", AutoSize = true };
+
+    public AppSettings Result { get; private set; }
+    public bool AutoStartEnabled => _autostart.Checked;
+
+    public SettingsForm(AppSettings current, bool autostart)
+    {
+        Result = current;
+        Text = "Schleimige Screenshots – Einstellungen";
+        AutoScaleMode = AutoScaleMode.Dpi;
+        FormBorderStyle = FormBorderStyle.FixedDialog;
+        MaximizeBox = MinimizeBox = false;
+        StartPosition = FormStartPosition.CenterScreen;
+        ShowInTaskbar = true;
+        Icon = TrayIcon.Create();
+
+        _hotkey.Gesture = current.Hotkey;
+        _clipboard.Checked = current.CopyToClipboard;
+        _browser.Checked = current.OpenInBrowser;
+        _search.Checked = current.SearchNonUrls;
+        _template.Text = current.SearchTemplate;
+        _notify.Checked = current.ShowNotifications;
+        _autostart.Checked = autostart;
+        _search.Enabled = _template.Enabled = _browser.Checked;
+        _browser.CheckedChanged += (_, _) => _search.Enabled = _template.Enabled = _browser.Checked;
+
+        var ok = new Button { Text = "Speichern", DialogResult = DialogResult.OK, AutoSize = true, MinimumSize = new Size(90, 0) };
+        var cancel = new Button { Text = "Abbrechen", DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new Size(90, 0) };
+        AcceptButton = ok;
+        CancelButton = cancel;
+        ok.Click += (_, _) => Collect();
+
+        var buttons = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, AutoSize = true };
+        buttons.Controls.AddRange([cancel, ok]);
+
+        var layout = new TableLayoutPanel
+        {
+            ColumnCount = 2, Dock = DockStyle.Fill, AutoSize = true, Padding = new Padding(12),
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+
+        void Row(string? label, Control c)
+        {
+            if (label is null) { layout.Controls.Add(c, 0, layout.RowCount); layout.SetColumnSpan(c, 2); }
+            else
+            {
+                layout.Controls.Add(new Label { Text = label, AutoSize = true, Anchor = AnchorStyles.Left, Margin = new Padding(3, 6, 12, 6) }, 0, layout.RowCount);
+                layout.Controls.Add(c, 1, layout.RowCount);
+            }
+            layout.RowCount++;
+        }
+
+        Row("Hotkey:", _hotkey);
+        Row(null, new Label { Text = "In das Feld klicken und die gewünschte Tastenkombination drücken.", AutoSize = true, ForeColor = SystemColors.GrayText });
+        Row(null, _clipboard);
+        Row(null, _browser);
+        Row(null, _search);
+        Row("Suchadresse:", _template);
+        Row(null, _notify);
+        Row(null, _autostart);
+        Row(null, buttons);
+
+        Controls.Add(layout);
+        AutoSize = true;
+        AutoSizeMode = AutoSizeMode.GrowAndShrink;
+        MinimumSize = new Size(480, 0);
+    }
+
+    private void Collect()
+    {
+        var template = _template.Text.Trim();
+        if (!template.Contains("{0}") || !Uri.TryCreate(template.Replace("{0}", "x"), UriKind.Absolute, out var u)
+            || (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps))
+            template = WebTarget.DefaultSearchTemplate;
+
+        Result = new AppSettings
+        {
+            Hotkey = _hotkey.Gesture,
+            CopyToClipboard = _clipboard.Checked,
+            OpenInBrowser = _browser.Checked,
+            SearchNonUrls = _search.Checked,
+            SearchTemplate = template,
+            ShowNotifications = _notify.Checked,
+            MaxBrowserTabs = Result.MaxBrowserTabs,
+        };
+    }
+}
