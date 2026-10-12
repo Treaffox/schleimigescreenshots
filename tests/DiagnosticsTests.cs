@@ -52,7 +52,8 @@ public class DiagnosticsTests
     public void Small_image_is_scanned_as_one_region()
     {
         var outcome = CodeScanner.ScanDetailed(Solid(300, 300, 255), 300, 300);
-        Assert.All(outcome.Passes, p => Assert.Single(p.Regions));
+        // normal/invertiert: ein Bild unter 500 px wird als Ganzes gescannt (die vergrößerten Durchläufe teilen auf)
+        Assert.All(outcome.Passes.Where(p => p.Name is "normal" or "invertiert"), p => Assert.Single(p.Regions));
     }
 
     [Fact]

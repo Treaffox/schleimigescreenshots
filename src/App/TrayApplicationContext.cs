@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using SchleimigeScreenshots.Core;
+using SchleimigeScreenshots.Core.Updates;
 
 namespace SchleimigeScreenshots;
 
@@ -7,6 +8,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
 {
     private const string TriggerHotkey = "Hotkey";
     private const string TriggerMenu = "Menü „Jetzt scannen“";
+    private const string TriggerMenuFull = "Menü „Ganzen Bildschirm scannen“";
 
     private readonly SettingsStore _store = new();
     private readonly NotifyIcon _tray;
@@ -14,20 +16,27 @@ internal sealed class TrayApplicationContext : ApplicationContext
     private readonly Icon _icon = TrayIcon.Create();
     private readonly ToolStripMenuItem _autostartItem;
     private readonly ToolStripMenuItem _scanItem;
+    private readonly ToolStripMenuItem _scanFullItem;
     private readonly ToolStripMenuItem _debugItem;
     private readonly ToolStripMenuItem _lastReportItem;
     private AppSettings _settings;
     private SettingsForm? _settingsForm;
     private DebugWindow? _debugWindow;
+    private RegionSelection? _selection;
+    private readonly UpdateService _updates;
+    private readonly ToolStripMenuItem _checkUpdatesItem;
+    private readonly ToolStripMenuItem _installUpdateItem;
+    private bool _updating;
     private string? _lastReport;
     private string _lastHeadline = "";
     private bool _busy;
 
-    public TrayApplicationContext()
+    public TrayApplicationContext(string[] args)
     {
         _settings = _store.Load();
 
-        _scanItem = new ToolStripMenuItem("Jetzt scannen", null, (_, _) => BeginScan(TriggerMenu));
+        _scanItem = new ToolStripMenuItem("Jetzt scannen", null, (_, _) => BeginScan(TriggerMenu, _settings.SelectRegion));
+        _scanFullItem = new ToolStripMenuItem("Ganzen Bildschirm scannen", null, (_, _) => BeginScan(TriggerMenuFull, false));
         _debugItem = new ToolStripMenuItem("Debug-Modus (Bericht nach jedem Scan)", null, (_, _) => ToggleDebug())
         {
             Checked = _settings.DebugMode,
@@ -40,14 +49,26 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             Checked = AutoStart.IsEnabled(),
         };
+        _installUpdateItem = new ToolStripMenuItem("Update installieren …", null, async (_, _) => await InstallPendingUpdateAsync())
+        {
+            Visible = false,
+        };
+        _installUpdateItem.Font = new Font(_installUpdateItem.Font, FontStyle.Bold);
+        _checkUpdatesItem = new ToolStripMenuItem("Nach Updates suchen …", null, async (_, _) => await CheckForUpdatesManuallyAsync());
+
         var menu = new ContextMenuStrip();
         menu.Items.AddRange([
+            new ToolStripMenuItem($"Schleimige Screenshots {AppVersion.Current}") { Enabled = false },
+            new ToolStripSeparator(),
             _scanItem,
+            _scanFullItem,
             new ToolStripMenuItem("Einstellungen …", null, (_, _) => ShowSettings()),
             new ToolStripSeparator(),
             _debugItem,
             _lastReportItem,
             new ToolStripSeparator(),
+            _installUpdateItem,
+            _checkUpdatesItem,
             _autostartItem,
             new ToolStripMenuItem("Beenden", null, (_, _) => ExitThread()),
         ]);
@@ -55,7 +76,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
         _tray = new NotifyIcon { Icon = _icon, ContextMenuStrip = menu, Visible = true };
         _tray.MouseDoubleClick += (_, e) => { if (e.Button == MouseButtons.Left) ShowSettings(); };
 
-        _hotkeys.Pressed += () => BeginScan(TriggerHotkey);
+        _hotkeys.Pressed += () => BeginScan(TriggerHotkey, _settings.SelectRegion);
         _hotkeys.CloseRequested += () =>
         {
             Log.Info("Beenden angefordert (WM_CLOSE)");
@@ -78,26 +99,177 @@ internal sealed class TrayApplicationContext : ApplicationContext
             }, null);
         }
         Log.Info($"Gestartet ({DebugInfo.Version}), Hotkey {_settings.Hotkey}, Debug-Modus {(_settings.DebugMode ? "an" : "aus")}");
+
+        UpdateService.Cleanup();
+        _updates = new UpdateService(() => _settings, () => _store.Save(_settings));
+        _updates.UpdateFound += OnUpdateFound;
+        _updates.Start();
+
+        // Startparameter --settings öffnet gleich den Einstellungsdialog (praktisch für Tests und Verknüpfungen)
+        if (args.Contains("--settings")) SynchronizationContext.Current?.Post(_ => ShowSettings(), null);
+
+        if (args.Contains("--updated"))
+        {
+            Log.Info($"Nach Update gestartet: Version {AppVersion.Current}");
+            SynchronizationContext.Current?.Post(_ =>
+                Notify("Aktualisiert", $"Schleimige Screenshots läuft jetzt in Version {AppVersion.Current}.", ToolTipIcon.Info), null);
+        }
     }
 
     private void UpdateTooltip() =>
-        _tray.Text = $"Schleimige Screenshots – {_settings.Hotkey}";
+        _tray.Text = $"Schleimige Screenshots {AppVersion.Current} – {_settings.Hotkey}";
+
+    // ---- Updates ----------------------------------------------------------------------------------------------
+
+    private void ShowPendingUpdate(UpdateInfo update)
+    {
+        _installUpdateItem.Text = $"Update auf Version {update.Version} installieren …";
+        _installUpdateItem.Visible = true;
+    }
+
+    private async void OnUpdateFound(UpdateInfo update)
+    {
+        try
+        {
+            ShowPendingUpdate(update);
+            if (!_settings.AutoInstallUpdates)
+            {
+                Notify("Update verfügbar", $"Version {update.Version} ist verfügbar. Tray-Menü → „Update installieren“.", ToolTipIcon.Info);
+                return;
+            }
+
+            // Nicht mitten in einem Scan oder bei geöffneten Einstellungen neu starten.
+            for (var i = 0; i < 18 && (_busy || _settingsForm is { IsDisposed: false }); i++)
+                await Task.Delay(10_000);
+            if (_busy || _settingsForm is { IsDisposed: false })
+            {
+                Log.Info("Update verfügbar, aber die App ist gerade beschäftigt – Installation bleibt über das Menü möglich");
+                return;
+            }
+            await InstallUpdateAsync(update, interactive: false);
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Automatisches Update", ex);
+        }
+    }
+
+    private async Task InstallUpdateAsync(UpdateInfo update, bool interactive)
+    {
+        if (_updating) return;
+        _updating = true;
+        try
+        {
+            Log.Info($"Installiere Update {update.Tag} ({UpdateService.DetectInstallKind()})");
+            Notify($"Update auf {update.Version}", "Wird heruntergeladen und installiert – die App startet gleich neu.", ToolTipIcon.Info);
+            var error = await _updates.InstallAsync(update);
+            if (error is null)
+            {
+                Log.Info("Update gestartet – beende diese Instanz");
+                ExitThread();
+                return;
+            }
+
+            Log.Error("Update nicht installiert: " + error);
+            if (interactive)
+            {
+                var open = MessageBox.Show($"{error}\n\nSoll die Download-Seite im Browser geöffnet werden?", "Update fehlgeschlagen",
+                    MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
+                if (open == DialogResult.Yes) OpenReleasePage(update);
+            }
+            else
+            {
+                Notify("Update fehlgeschlagen", error, ToolTipIcon.Warning);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Update-Installation", ex);
+            if (interactive) Program.ShowFatal("Update fehlgeschlagen", ex);
+        }
+        finally
+        {
+            _updating = false;
+        }
+    }
+
+    private async Task InstallPendingUpdateAsync()
+    {
+        if (_updates.Pending is not { } update) return;
+        var answer = MessageBox.Show($"Version {update.Version} jetzt installieren?\nDie App startet dabei neu.",
+            "Update installieren", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+        if (answer == DialogResult.Yes) await InstallUpdateAsync(update, interactive: true);
+    }
+
+    private async Task CheckForUpdatesManuallyAsync()
+    {
+        _checkUpdatesItem.Enabled = false;
+        try
+        {
+            var result = await _updates.CheckAsync();
+            if (result.Error is not null)
+            {
+                MessageBox.Show("Die Suche nach Updates ist fehlgeschlagen:\n\n" + result.Error, "Updates",
+                    MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
+            else if (result.Update is not { } update)
+            {
+                MessageBox.Show($"Du verwendest die aktuelle Version ({AppVersion.Current}).", "Updates",
+                    MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else
+            {
+                ShowPendingUpdate(update);
+                var notes = update.Notes.Length > 700 ? update.Notes[..700] + "…" : update.Notes;
+                var answer = MessageBox.Show(
+                    $"Version {update.Version} ist verfügbar (installiert: {AppVersion.Current}).\n\n{notes}\n\nJetzt installieren? Die App startet dabei neu.",
+                    "Update verfügbar", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+                if (answer == DialogResult.Yes) await InstallUpdateAsync(update, interactive: true);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error("Manuelle Update-Prüfung", ex);
+            Program.ShowFatal("Update-Prüfung fehlgeschlagen", ex);
+        }
+        finally
+        {
+            _checkUpdatesItem.Enabled = true;
+        }
+    }
+
+    private static void OpenReleasePage(UpdateInfo update)
+    {
+        // Nur die Release-Seite dieses Projekts öffnen
+        if (!update.PageUrl.StartsWith($"https://github.com/{UpdateService.Repository}/", StringComparison.Ordinal)) return;
+        try { Process.Start(new ProcessStartInfo(update.PageUrl) { UseShellExecute = true }); }
+        catch (Exception ex) { Log.Error("Release-Seite öffnen", ex); }
+    }
 
     // ---- Scan -------------------------------------------------------------------------------------------------
 
-    private async void BeginScan(string trigger)
+    private async void BeginScan(string trigger, bool selectRegion)
     {
         if (_busy)
         {
-            Log.Info($"Scan ({trigger}) ignoriert: ein Scan läuft bereits");
+            // Hotkey während der Bereichsauswahl bricht diese ab (wie bei Screenshot-Programmen üblich).
+            if (_selection is not null)
+            {
+                Log.Info($"Bereichsauswahl durch erneuten Aufruf ({trigger}) abgebrochen");
+                _selection.Cancel();
+            }
+            else
+            {
+                Log.Info($"Scan ({trigger}) ignoriert: ein Scan läuft bereits");
+            }
             return;
         }
 
         _busy = true;
-        _scanItem.Enabled = false;
+        _scanItem.Enabled = _scanFullItem.Enabled = false;
         try
         {
-            await ScanAsync(trigger);
+            await ScanAsync(trigger, selectRegion);
         }
         catch (Exception ex)
         {
@@ -108,16 +280,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
         finally
         {
             _busy = false;
-            _scanItem.Enabled = true;
+            _scanItem.Enabled = _scanFullItem.Enabled = true;
         }
     }
 
-    private async Task ScanAsync(string trigger)
+    private async Task ScanAsync(string trigger, bool selectRegion)
     {
         var total = Stopwatch.StartNew();
         var report = new ScanReport();
         report.Title($"Schleimige Screenshots – Debug-Bericht ({DateTime.Now:yyyy-MM-dd HH:mm:ss})");
-        report.Line($"Auslöser: {trigger}");
+        report.Line($"Auslöser: {trigger} | Modus: {(selectRegion ? "Bereichsauswahl" : "ganzer Bildschirm")}");
         try
         {
             foreach (var line in DebugInfo.Describe(_settings)) report.Line(line);
@@ -131,33 +303,65 @@ internal sealed class TrayApplicationContext : ApplicationContext
         string headline;
         string body;
         var icon = ToolTipIcon.Info;
-        CaptureResult? shot = null;
+        CaptureResult? shot = null; // das gescannte Bild: ganzer Bildschirm oder der gewählte Bereich
+        var cancelled = false;
+        var selectionTime = TimeSpan.Zero; // Wartezeit des Nutzers gehört nicht zur Scandauer
+        var debugWasVisible = false;
 
         try
         {
             // Debug-Fenster bzw. das gerade geschlossene Kontextmenü dürfen nicht im Screenshot landen.
-            var debugVisible = _debugWindow is { Visible: true };
+            var debugVisible = debugWasVisible = _debugWindow is { Visible: true };
             if (debugVisible) _debugWindow!.Hide();
-            if (debugVisible || trigger == TriggerMenu) await Task.Delay(300);
+            if (debugVisible || trigger is TriggerMenu or TriggerMenuFull) await Task.Delay(300);
 
             report.Section("Aufnahme");
             shot = ScreenCapture.CaptureVirtualScreen();
             DescribeCapture(report, shot);
 
-            report.Section("Erkennung");
-            var outcome = await DetectAsync(shot);
-            DescribeDetection(report, outcome);
-
-            report.Section("Ergebnis");
-            if (outcome.Results.Count == 0)
+            if (selectRegion)
             {
-                headline = "Kein Code gefunden";
-                body = "Auf dem Bildschirm wurde kein QR-Code oder Barcode erkannt.";
-                report.Line("Kein Code gefunden.");
+                var selectWatch = Stopwatch.StartNew();
+                var region = await SelectRegionAsync(shot);
+                if (region is { } picked)
+                {
+                    var r = Rectangle.Intersect(picked, new Rectangle(0, 0, shot.Width, shot.Height)); // Sicherheitsnetz gegen Randfälle
+                    if (r.Width <= 0 || r.Height <= 0) throw new InvalidOperationException($"Der gewählte Bereich {picked} liegt außerhalb der Aufnahme.");
+                    report.Section("Bereichsauswahl");
+                    selectionTime = selectWatch.Elapsed;
+                    report.Line($"Bereich: {r.Width} x {r.Height} px @ ({r.X},{r.Y}) | Auswahl dauerte {selectionTime.TotalSeconds:0.0} s");
+                    shot = shot.Crop(r);
+                    DescribeStats(report, shot, warnIfBlank: false);
+                }
+                else
+                {
+                    cancelled = true;
+                }
+            }
+
+            if (cancelled)
+            {
+                headline = body = "";
             }
             else
             {
-                (headline, body, icon) = Act(outcome.Results, report);
+                report.Section("Erkennung");
+                var outcome = await DetectAsync(shot);
+                DescribeDetection(report, outcome);
+
+                report.Section("Ergebnis");
+                if (outcome.Results.Count == 0)
+                {
+                    headline = "Kein Code gefunden";
+                    body = selectRegion
+                        ? "Im gewählten Bereich wurde kein QR-Code oder Barcode erkannt."
+                        : "Auf dem Bildschirm wurde kein QR-Code oder Barcode erkannt.";
+                    report.Line("Kein Code gefunden.");
+                }
+                else
+                {
+                    (headline, body, icon) = Act(outcome.Results, report);
+                }
             }
         }
         catch (OperationCanceledException)
@@ -175,8 +379,16 @@ internal sealed class TrayApplicationContext : ApplicationContext
             report.Error("Scan", ex);
         }
 
+        if (cancelled)
+        {
+            Log.Info("Scan abgebrochen (Bereichsauswahl)");
+            if (debugWasVisible && _debugWindow is { IsDisposed: false }) _debugWindow.Show(); // das zuvor offene Debug-Fenster zurückholen
+            return;
+        }
+
         report.Section("Zusammenfassung");
-        report.Line($"{headline} – Gesamtdauer {total.ElapsedMilliseconds} ms");
+        report.Line($"{headline} – Gesamtdauer {(total.Elapsed - selectionTime).TotalMilliseconds:0} ms" +
+                    (selectionTime > TimeSpan.Zero ? " (ohne Auswahlzeit)" : ""));
 
         var text = report.ToString();
         _lastReport = text;
@@ -200,12 +412,31 @@ internal sealed class TrayApplicationContext : ApplicationContext
         return await Task.Run(() => CodeScanner.ScanDetailed(shot.Pixels, shot.Width, shot.Height, cts.Token));
     }
 
+    private async Task<Rectangle?> SelectRegionAsync(CaptureResult shot)
+    {
+        var selection = new RegionSelection(shot);
+        _selection = selection;
+        try
+        {
+            selection.Show();
+            return await selection.Result;
+        }
+        finally
+        {
+            _selection = null;
+        }
+    }
+
     private static void DescribeCapture(ScanReport report, CaptureResult shot)
     {
         report.Line($"Methode: {shot.Method} | Dauer: {shot.Milliseconds:0} ms");
         report.Line($"Größe: {shot.Width} x {shot.Height} px ({shot.Pixels.Length / 1048576.0:0.0} MB) @ ({shot.Bounds.X},{shot.Bounds.Y})");
         foreach (var note in shot.Notes) report.Warn(note);
+        DescribeStats(report, shot, warnIfBlank: true);
+    }
 
+    private static void DescribeStats(ScanReport report, CaptureResult shot, bool warnIfBlank)
+    {
         try
         {
             var watch = Stopwatch.StartNew();
@@ -213,7 +444,7 @@ internal sealed class TrayApplicationContext : ApplicationContext
             report.Line($"Pixelstatistik (Stichprobe, {watch.ElapsedMilliseconds} ms): Helligkeit min/Ø/max = {st.MinLuma} / {st.MeanLuma:0.0} / {st.MaxLuma}" +
                         $" | fast schwarz {st.NearBlackShare:P0} | fast weiß {st.NearWhiteShare:P0}" +
                         $" | Alpha=0 bei {st.ZeroAlphaShare:P0} | Farben {st.DistinctColors}{(st.DistinctColorsCapped ? "+" : "")}");
-            if (st.LooksBlank)
+            if (warnIfBlank && st.LooksBlank)
                 report.Warn("Die Aufnahme ist praktisch einfarbig – der Bildschirm wurde vermutlich nicht richtig erfasst " +
                             "(gesperrte Sitzung, Remotedesktop, geschützter Inhalt oder Treiberproblem).");
         }
@@ -407,6 +638,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
 
     protected override void ExitThreadCore()
     {
+        _selection?.Cancel();
+        _updates.Dispose();
         _tray.Visible = false;
         _tray.Dispose();
         _hotkeys.Dispose();

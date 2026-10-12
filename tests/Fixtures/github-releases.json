@@ -1,0 +1,66 @@
+[
+ {
+  "tag_name": "v1.0.1",
+  "name": "Schleimige Screenshots 1.0.1",
+  "draft": false,
+  "prerelease": true,
+  "html_url": "https://github.com/Treaffox/schleimigescreenshots/releases/tag/v1.0.1",
+  "body": "Fehlerbehebung, Debug-Modus und Installer.\n\n### Neu in 1.0.1\n- **Behoben:** In 1.0.0 brach jeder Scan beim Screenshot ab (`InvalidEnumArgumentException` in `CopyFromScreen`). Die Fehlermeldung ging in einer von Windows leicht unterdrückten Sprechblase unter, es sah aus, als passiere nichts. Jetzt wird direkt per `BitBlt` aufgenommen.\n- **Debug-Modus** (Tray-Symbol → Rechtsklick → „Debug-Modus“): nach jedem Scan ein kopierbarer Bericht mit Aufnahme-, Erkennungs- und Fehlerdetails, Screenshot als PNG speichern, Selbsttest. Unerwartete Fehler zeigen den Bericht auch ohne Debug-Modus.\n- **Installer** (`SchleimigeScreenshots-Setup-1.0.1.exe`): ohne Administratorrechte, frei wählbarer Zielordner, Startmenü-Eintrag, optionale Desktop-Verknüpfung und Autostart, Deinstallation unter Einstellungen → Apps, Update bei laufender App.\n- Neues Programmsymbol; die App lässt sich sauber von außen beenden (WM_CLOSE).\n\n### Installation\n`SchleimigeScreenshots-Setup-1.0.1.exe` starten (empfohlen). Alternativ `SchleimigeScreenshots.exe` direkt starten (portabel, kein .NET nötig).\nSilent: `SchleimigeScreenshots-Setup-1.0.1.exe /VERYSILENT /TASKS=\"desktopicon,autostart\"`\n\n### Hinweise\n- **Noch nicht auf einem echten Windows getestet:** Erkennung und Link-Logik sind per Unit-Tests geprüft (40 Tests); Screenshot, Setup, Update und Deinstallation liefen unter Wine mit virtuellem Bildschirm. Daher als Pre-release markiert. Rückmeldungen gern als Issue – bei Problemen bitte den Debug-Bericht („Alles kopieren“) anhängen.\n- Nicht signiert: Windows SmartScreen kann warnen („Weitere Informationen“ → „Trotzdem ausführen“).\n- Prüfsummen: `SHA256SUMS.txt`.\n",
+  "published_at": "2026-10-12T11:43:58Z",
+  "assets": [
+   {
+    "name": "SchleimigeScreenshots-Setup-1.0.1.exe",
+    "size": 45310729,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.1/SchleimigeScreenshots-Setup-1.0.1.exe",
+    "digest": "sha256:93da64e43fa469df8ac077078f4c7e5bb8cb8c03d785826b568036ec96e216e0",
+    "content_type": "application/x-msdownload"
+   },
+   {
+    "name": "SchleimigeScreenshots.exe",
+    "size": 49483885,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.1/SchleimigeScreenshots.exe",
+    "digest": "sha256:68abf13209df8fa55ae3a25759fd1c1b1c5228f21282ec6e225142f1f39f0b53",
+    "content_type": "application/x-msdownload"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 196,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.1/SHA256SUMS.txt",
+    "digest": "sha256:3f34714592939ebc1f12d7ef63e2e65eaaa9f27d10f98e10f9713a513580d20b",
+    "content_type": "text/plain; charset=utf-8"
+   }
+  ]
+ },
+ {
+  "tag_name": "v1.0.0",
+  "name": "Schleimige Screenshots 1.0.0",
+  "draft": false,
+  "prerelease": true,
+  "html_url": "https://github.com/Treaffox/schleimigescreenshots/releases/tag/v1.0.0",
+  "body": "> ⚠️ **Diese Version ist defekt:** Jeder Scan bricht beim Screenshot mit einem Fehler ab. Bitte stattdessen [v1.0.1](https://github.com/Treaffox/schleimigescreenshots/releases/tag/v1.0.1) verwenden (behoben, mit Debug-Modus und Installer).\n\nTray-App für Windows 10/11 (x64): Hotkey (Standard **Strg + Umschalt + Q**) → Screenshot aller Monitore → QR-Codes/Barcodes erkennen → Text in die Zwischenablage, Links im Standardbrowser.\n\n### Installation (ohne Administratorrechte)\n1. `SchleimigeScreenshots-win-x64.zip` herunterladen und entpacken\n2. `powershell -ExecutionPolicy Bypass -File install.ps1 -Autostart`\n\nAlternativ die `SchleimigeScreenshots.exe` direkt starten (portabel, kein .NET nötig).\n\n### Hinweise\n- **Noch nicht auf einem echten Windows getestet**: Die Erkennung und die Link-Logik sind per Unit-Tests geprüft (21 Tests), die EXE wurde unter Linux gebaut. Daher als Pre-release markiert – Rückmeldungen und Fehler gern als Issue.\n- Die EXE ist nicht signiert; Windows SmartScreen kann warnen („Weitere Informationen“ → „Trotzdem ausführen“).\n- Es werden nur `http`/`https`-Links geöffnet, maximal 5 Tabs pro Scan.\n\n",
+  "published_at": "2026-10-12T10:05:20Z",
+  "assets": [
+   {
+    "name": "SchleimigeScreenshots-win-x64.zip",
+    "size": 43708530,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.0/SchleimigeScreenshots-win-x64.zip",
+    "digest": "sha256:9416aeef4b0e5bf1c53f15a0f43191eca61c52fa98f52d765fe165e24f5f6ac4",
+    "content_type": "application/zip"
+   },
+   {
+    "name": "SchleimigeScreenshots.exe",
+    "size": 49356143,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.0/SchleimigeScreenshots.exe",
+    "digest": "sha256:ab9e0697bde2015ec2d7d617e5b62c1803f019027dc71289db916de9c316b088",
+    "content_type": "application/x-msdownload"
+   },
+   {
+    "name": "SHA256SUMS.txt",
+    "size": 192,
+    "browser_download_url": "https://github.com/Treaffox/schleimigescreenshots/releases/download/v1.0.0/SHA256SUMS.txt",
+    "digest": "sha256:41996899a34d7eabd33064e49753a11dc222214eb1c973c7074e855c9f4c9bd5",
+    "content_type": "text/plain; charset=utf-8"
+   }
+  ]
+ }
+]

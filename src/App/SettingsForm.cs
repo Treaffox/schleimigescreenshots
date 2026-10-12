@@ -5,11 +5,15 @@ namespace SchleimigeScreenshots;
 internal sealed class SettingsForm : Form
 {
     private readonly HotkeyBox _hotkey = new() { Dock = DockStyle.Fill };
+    private readonly CheckBox _selectRegion = new() { Text = "Beim Scannen Bereich auswählen (wie ein Screenshot-Programm)", AutoSize = true };
     private readonly CheckBox _clipboard = new() { Text = "Ergebnis in die Zwischenablage kopieren", AutoSize = true };
     private readonly CheckBox _browser = new() { Text = "Im Standardbrowser öffnen", AutoSize = true };
     private readonly CheckBox _search = new() { Text = "Kein Link (z. B. Barcode-Nummer): per Websuche öffnen", AutoSize = true };
     private readonly TextBox _template = new() { Dock = DockStyle.Fill };
     private readonly CheckBox _notify = new() { Text = "Benachrichtigung anzeigen", AutoSize = true };
+    private readonly CheckBox _autoCheckUpdates = new() { Text = "Automatisch nach Updates suchen (GitHub)", AutoSize = true };
+    private readonly CheckBox _autoInstallUpdates = new() { Text = "Updates automatisch installieren (die App startet dabei kurz neu)", AutoSize = true };
+    private readonly CheckBox _includePreReleases = new() { Text = "Auch Vorabversionen (Pre-releases) verwenden", AutoSize = true };
     private readonly CheckBox _autostart = new() { Text = "Mit Windows starten", AutoSize = true };
     private readonly CheckBox _debug = new() { Text = "Debug-Modus: nach jedem Scan einen kopierbaren Bericht zeigen", AutoSize = true };
     private readonly AppSettings _original;
@@ -30,11 +34,17 @@ internal sealed class SettingsForm : Form
         Icon = TrayIcon.Create();
 
         _hotkey.Gesture = current.Hotkey;
+        _selectRegion.Checked = current.SelectRegion;
         _clipboard.Checked = current.CopyToClipboard;
         _browser.Checked = current.OpenInBrowser;
         _search.Checked = current.SearchNonUrls;
         _template.Text = current.SearchTemplate;
         _notify.Checked = current.ShowNotifications;
+        _autoCheckUpdates.Checked = current.AutoCheckUpdates;
+        _autoInstallUpdates.Checked = current.AutoInstallUpdates;
+        _includePreReleases.Checked = current.IncludePreReleases;
+        _autoInstallUpdates.Enabled = _includePreReleases.Enabled = _autoCheckUpdates.Checked;
+        _autoCheckUpdates.CheckedChanged += (_, _) => _autoInstallUpdates.Enabled = _includePreReleases.Enabled = _autoCheckUpdates.Checked;
         _autostart.Checked = autostart;
         _debug.Checked = current.DebugMode;
         _search.Enabled = _template.Enabled = _browser.Checked;
@@ -69,11 +79,15 @@ internal sealed class SettingsForm : Form
 
         Row("Hotkey:", _hotkey);
         Row(null, new Label { Text = "In das Feld klicken und die gewünschte Tastenkombination drücken.", AutoSize = true, ForeColor = SystemColors.GrayText });
+        Row(null, _selectRegion);
         Row(null, _clipboard);
         Row(null, _browser);
         Row(null, _search);
         Row("Suchadresse:", _template);
         Row(null, _notify);
+        Row(null, _autoCheckUpdates);
+        Row(null, _autoInstallUpdates);
+        Row(null, _includePreReleases);
         Row(null, _autostart);
         Row(null, _debug);
         Row(null, buttons);
@@ -94,11 +108,15 @@ internal sealed class SettingsForm : Form
         // Klon des Originals: nicht im Dialog angezeigte Einstellungen (z. B. MaxBrowserTabs) bleiben erhalten.
         var s = _original.Clone();
         s.Hotkey = _hotkey.Gesture;
+        s.SelectRegion = _selectRegion.Checked;
         s.CopyToClipboard = _clipboard.Checked;
         s.OpenInBrowser = _browser.Checked;
         s.SearchNonUrls = _search.Checked;
         s.SearchTemplate = template;
         s.ShowNotifications = _notify.Checked;
+        s.AutoCheckUpdates = _autoCheckUpdates.Checked;
+        s.AutoInstallUpdates = _autoInstallUpdates.Checked;
+        s.IncludePreReleases = _includePreReleases.Checked;
         s.DebugMode = _debug.Checked;
         Result = s;
     }

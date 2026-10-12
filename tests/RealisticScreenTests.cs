@@ -7,11 +7,11 @@ namespace SchleimigeScreenshots.Tests;
 /// <summary>Bildschirm-ähnliche Bilder: geglättete, krumm skalierte Codes auf unruhigem Hintergrund.</summary>
 public class RealisticScreenTests
 {
-    private static BitMatrix Encode(string text, BarcodeFormat f = BarcodeFormat.QR_CODE) =>
+    internal static BitMatrix Encode(string text, BarcodeFormat f = BarcodeFormat.QR_CODE) =>
         new MultiFormatWriter().encode(text, f, 1, 1, new Dictionary<EncodeHintType, object> { [EncodeHintType.MARGIN] = 4 });
 
     /// <summary>Webseiten-artiger Hintergrund: Verlauf, Textzeilen-Blöcke, leichtes Rauschen.</summary>
-    private static byte[] Background(int w, int h, bool dark, int seed)
+    internal static byte[] Background(int w, int h, bool dark, int seed)
     {
         var rnd = new Random(seed);
         var px = new byte[w * h * 4];
@@ -31,7 +31,7 @@ public class RealisticScreenTests
     }
 
     /// <summary>Zeichnet den Code mit Flächenmittelung (wie ein skalierter Browser/Viewer), Modulgröße in Pixeln beliebig.</summary>
-    private static void DrawSmooth(byte[] px, int w, BitMatrix m, double moduleSize, int x0, int y0, bool invert)
+    internal static void DrawSmooth(byte[] px, int w, BitMatrix m, double moduleSize, int x0, int y0, bool invert)
     {
         int size = (int)Math.Ceiling(m.Width * moduleSize);
         for (int y = 0; y < size; y++)

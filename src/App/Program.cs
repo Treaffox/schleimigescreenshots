@@ -5,9 +5,14 @@ internal static class Program
     private static bool _fatalShown;
 
     [STAThread]
-    private static void Main()
+    private static void Main(string[] args)
     {
-        using var mutex = new Mutex(true, @"Local\SchleimigeScreenshots.SingleInstance", out var firstInstance);
+        // Nach einem Update startet die neue Version, während die alte noch beendet wird: kurz auf den Mutex warten.
+        var afterUpdate = args.Contains("--restarted") || args.Contains("--updated");
+        using var mutex = new Mutex(false, @"Local\SchleimigeScreenshots.SingleInstance");
+        bool firstInstance;
+        try { firstInstance = mutex.WaitOne(afterUpdate ? TimeSpan.FromSeconds(20) : TimeSpan.Zero); }
+        catch (AbandonedMutexException) { firstInstance = true; } // frühere Instanz wurde hart beendet
         if (!firstInstance)
         {
             MessageBox.Show("Schleimige Screenshots läuft bereits (Symbol im Infobereich der Taskleiste).",
@@ -21,7 +26,14 @@ internal static class Program
         AppDomain.CurrentDomain.UnhandledException += (_, e) => Log.Error("Unbehandelter Fehler", e.ExceptionObject as Exception);
         TaskScheduler.UnobservedTaskException += (_, e) => { Log.Error("Task-Fehler", e.Exception); e.SetObserved(); };
 
-        Application.Run(new TrayApplicationContext());
+        try
+        {
+            Application.Run(new TrayApplicationContext(args));
+        }
+        finally
+        {
+            mutex.ReleaseMutex();
+        }
     }
 
     /// <summary>

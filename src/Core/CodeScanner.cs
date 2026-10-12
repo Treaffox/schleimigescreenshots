@@ -47,6 +47,20 @@ public static class CodeScanner
         if (found.Count == 0)
             found = RunPass("invertiert", source, regions, inverted: true, ct, passes); // helle Codes auf dunklem Grund (Dark Mode)
 
+        // Sehr feine Codes (< ca. 2 px je Modul) in kleinen Bildern, z. B. einem vom Nutzer gewählten Bereich:
+        // vergrößert erneut suchen. Große Bilder (ganzer Bildschirm) werden nicht vergrößert, das wäre zu langsam.
+        foreach (var factor in UpscaleFactors(width, height))
+        {
+            if (found.Count > 0) break;
+            ct.ThrowIfCancellationRequested();
+            var big = new RGBLuminanceSource(ImageOps.UpscaleLuminance(bgra, width, height, factor),
+                width * factor, height * factor, RGBLuminanceSource.BitmapFormat.Gray8);
+            var bigRegions = BuildRegions(big.Width, big.Height, maxGrid: 2);
+            found = RunPass($"x{factor}", big, bigRegions, inverted: false, ct, passes, 1.0 / factor);
+            if (found.Count == 0)
+                found = RunPass($"x{factor} invertiert", big, bigRegions, inverted: true, ct, passes, 1.0 / factor);
+        }
+
         var ordered = found
             .OrderBy(r => Math.Round(r.Y / 40.0)) // grob zeilenweise, dann von links nach rechts
             .ThenBy(r => r.X)
@@ -54,12 +68,20 @@ public static class CodeScanner
         return new ScanOutcome(ordered, passes, total.Elapsed.TotalMilliseconds);
     }
 
-    private static List<Region> BuildRegions(int w, int h)
+    /// <summary>Vergrößerungsfaktoren, die für ein Bild dieser Größe sinnvoll (und schnell genug) sind.</summary>
+    private static IEnumerable<int> UpscaleFactors(int width, int height)
+    {
+        long pixels = (long)width * height;
+        if (pixels <= 1_200_000) yield return 2;
+        if (pixels <= 400_000) yield return 3;
+    }
+
+    private static List<Region> BuildRegions(int w, int h, int maxGrid = 3)
     {
         var list = new List<Region> { new(0, 0, w, h) };
         if (w < 500 && h < 500) return list;
 
-        foreach (var n in new[] { 2, 3 })
+        foreach (var n in new[] { 2, 3 }.Where(n => n <= maxGrid))
         {
             int tw = w / n, th = h / n;
             int ox = tw / 4, oy = th / 4; // 25 % Überlappung, damit Codes an Kachelkanten nicht zerschnitten werden
@@ -77,7 +99,7 @@ public static class CodeScanner
     }
 
     private static List<ScanResult> RunPass(string name, LuminanceSource source, List<Region> regions, bool inverted,
-        CancellationToken ct, List<PassDiagnostics> passes)
+        CancellationToken ct, List<PassDiagnostics> passes, double positionScale = 1.0)
     {
         var passWatch = Stopwatch.StartNew();
         var results = new List<ScanResult>();
@@ -117,7 +139,7 @@ public static class CodeScanner
                         {
                             if (string.IsNullOrEmpty(r.Text)) continue;
                             var (cx, cy) = Center(r);
-                            results.Add(new ScanResult(r.Text, r.BarcodeFormat.ToString(), cx + region.X, cy + region.Y));
+                            results.Add(new ScanResult(r.Text, r.BarcodeFormat.ToString(), (cx + region.X) * positionScale, (cy + region.Y) * positionScale));
                             hits++;
                         }
                     }

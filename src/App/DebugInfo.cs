@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.Reflection;
 using System.Runtime.InteropServices;
 
 namespace SchleimigeScreenshots;
@@ -10,8 +9,7 @@ internal static class DebugInfo
     [DllImport("user32.dll")] private static extern IntPtr GetThreadDpiAwarenessContext();
     [DllImport("user32.dll")] private static extern bool AreDpiAwarenessContextsEqual(IntPtr a, IntPtr b);
 
-    public static string Version =>
-        Assembly.GetEntryAssembly()?.GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "?";
+    public static string Version => AppVersion.Informational;
 
     public static List<string> Describe(AppSettings s)
     {
@@ -24,7 +22,9 @@ internal static class DebugInfo
             $"Sitzung: Remotedesktop={(SystemInformation.TerminalServerSession ? "ja" : "nein")} | Kultur={CultureInfo.CurrentUICulture.Name} " +
             $"| DPI-Modus: {DpiMode()}",
             $"Hotkey: {s.Hotkey} | Zwischenablage={Yn(s.CopyToClipboard)} | Browser={Yn(s.OpenInBrowser)} " +
-            $"| Websuche={Yn(s.SearchNonUrls)} | max. Tabs={s.MaxBrowserTabs} | Debug-Modus={Yn(s.DebugMode)}",
+            $"| Websuche={Yn(s.SearchNonUrls)} | max. Tabs={s.MaxBrowserTabs} | Bereichsauswahl={Yn(s.SelectRegion)} | Debug-Modus={Yn(s.DebugMode)}",
+            $"Updates: automatisch prüfen={Yn(s.AutoCheckUpdates)} | automatisch installieren={Yn(s.AutoInstallUpdates)} " +
+            $"| Vorabversionen={Yn(s.IncludePreReleases)} | Installation={UpdateService.DetectInstallKind()} | letzte Prüfung={(s.LastUpdateCheckUtc is { } t ? t.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "nie")}",
         };
 
         var v = SystemInformation.VirtualScreen;

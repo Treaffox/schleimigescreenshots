@@ -21,4 +21,7 @@
   <ItemGroup>
     <ProjectReference Include="..\src\Core\SchleimigeScreenshots.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <None Update="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

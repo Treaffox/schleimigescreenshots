@@ -6,6 +6,8 @@ namespace SchleimigeScreenshots;
 public sealed class AppSettings
 {
     public HotkeyGesture Hotkey { get; set; } = HotkeyGesture.Default;
+    /// <summary>Beim Scannen erst einen Bildschirmbereich aufziehen (wie bei einem Screenshot-Programm) statt den ganzen Bildschirm zu scannen.</summary>
+    public bool SelectRegion { get; set; } = true;
     public bool CopyToClipboard { get; set; } = true;
     public bool OpenInBrowser { get; set; } = true;
     /// <summary>Text, der keine Webadresse ist (z. B. EAN), per Websuche öffnen.</summary>
@@ -16,6 +18,14 @@ public sealed class AppSettings
     public bool DebugMode { get; set; }
     /// <summary>Schutz vor Tab-Flut, wenn viele Codes auf dem Bildschirm sind.</summary>
     public int MaxBrowserTabs { get; set; } = 5;
+
+    /// <summary>Regelmäßig auf GitHub nach neuen Versionen suchen.</summary>
+    public bool AutoCheckUpdates { get; set; } = true;
+    /// <summary>Gefundene Updates ohne Rückfrage installieren (die App startet dabei kurz neu).</summary>
+    public bool AutoInstallUpdates { get; set; } = true;
+    /// <summary>Auch als „Pre-release“ markierte Versionen berücksichtigen (solange es nur solche gibt, nötig).</summary>
+    public bool IncludePreReleases { get; set; } = true;
+    public DateTime? LastUpdateCheckUtc { get; set; }
 
     public AppSettings Clone() => (AppSettings)MemberwiseClone();
 }

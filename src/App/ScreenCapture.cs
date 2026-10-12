@@ -6,7 +6,17 @@ using System.Runtime.InteropServices;
 namespace SchleimigeScreenshots;
 
 internal sealed record CaptureResult(
-    byte[] Pixels, int Width, int Height, Rectangle Bounds, string Method, double Milliseconds, IReadOnlyList<string> Notes);
+    byte[] Pixels, int Width, int Height, Rectangle Bounds, string Method, double Milliseconds, IReadOnlyList<string> Notes)
+{
+    /// <summary>Ausschnitt in Aufnahme-Koordinaten (0,0 = linke obere Ecke der Aufnahme); Bounds wandert mit.</summary>
+    public CaptureResult Crop(Rectangle region) => this with
+    {
+        Pixels = Core.ImageOps.Crop(Pixels, Width, Height, region.X, region.Y, region.Width, region.Height),
+        Width = region.Width,
+        Height = region.Height,
+        Bounds = new Rectangle(Bounds.X + region.X, Bounds.Y + region.Y, region.Width, region.Height),
+    };
+}
 
 internal static class ScreenCapture
 {
@@ -85,10 +95,10 @@ internal static class ScreenCapture
         }
     }
 
-    /// <summary>Speichert BGRA-Bytes als PNG (für den Debug-Bericht).</summary>
-    public static void SavePng(byte[] pixels, int width, int height, string path)
+    /// <summary>Erzeugt aus BGRA-Bytes eine 32-Bit-Bitmap (das vierte Byte wird von GDI+ ignoriert).</summary>
+    public static Bitmap CreateBitmap(byte[] pixels, int width, int height)
     {
-        using var bmp = new Bitmap(width, height, PixelFormat.Format32bppRgb);
+        var bmp = new Bitmap(width, height, PixelFormat.Format32bppRgb);
         var data = bmp.LockBits(new Rectangle(0, 0, width, height), ImageLockMode.WriteOnly, PixelFormat.Format32bppRgb);
         try
         {
@@ -100,7 +110,13 @@ internal static class ScreenCapture
         {
             bmp.UnlockBits(data);
         }
+        return bmp;
+    }
 
+    /// <summary>Speichert BGRA-Bytes als PNG (für den Debug-Bericht).</summary>
+    public static void SavePng(byte[] pixels, int width, int height, string path)
+    {
+        using var bmp = CreateBitmap(pixels, width, height);
         // 24 Bit ohne Alpha: das unbenutzte vierte Byte der Aufnahme darf nie Transparenz bedeuten.
         using var opaque = bmp.Clone(new Rectangle(0, 0, width, height), PixelFormat.Format24bppRgb);
         opaque.Save(path, ImageFormat.Png);

@@ -95,11 +95,22 @@ Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: 
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Stilles Update durch die App selbst (Parameter /RESTARTAPP=1): danach die neue Version starten
+Filename: "{app}\{#AppExe}"; Parameters: "--updated"; Flags: nowait; Check: RestartRequested
 
 [Code]
 const
   RunKey   = 'Software\Microsoft\Windows\CurrentVersion\Run';
   RunValue = 'SchleimigeScreenshots';
+
+var
+  InstallReached: Boolean;
+
+{ Der Updater der App ruft das Setup mit /RESTARTAPP=1 auf }
+function RestartRequested(): Boolean;
+begin
+  Result := ExpandConstant('{param:RESTARTAPP|0}') = '1';
+end;
 
 function AppIsRunning(): Boolean;
 begin
@@ -147,6 +158,26 @@ begin
   Result := '';
   if not StopApp() then
     Result := FmtMessage(CustomMessage('StopFailed'), ['{#AppName}']);
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+begin
+  if CurStep = ssPostInstall then InstallReached := True;
+end;
+
+{ Sicherheitsnetz für Updates: scheitert die Installation, nachdem die App beendet wurde (z. B. Virenscanner, Platte voll),
+  die vorhandene Version wieder starten, damit der Nutzer nicht ohne laufende App dasteht. }
+procedure DeinitializeSetup();
+var
+  Exe: String;
+  ResultCode: Integer;
+begin
+  if RestartRequested() and (not InstallReached) then
+  begin
+    Exe := AddBackslash(WizardDirValue) + '{#AppExe}';
+    if FileExists(Exe) then
+      Exec(Exe, '--restarted', '', SW_SHOWNORMAL, ewNoWait, ResultCode);
+  end;
 end;
 
 function InitializeUninstall(): Boolean;
