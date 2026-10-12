@@ -8,6 +8,7 @@
     <ApplicationVisualStyles>true</ApplicationVisualStyles>
     <ApplicationUseCompatibleTextRendering>false</ApplicationUseCompatibleTextRendering>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>
   </PropertyGroup>
@@ -19,6 +20,9 @@
     <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
     <DebugType>none</DebugType>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\SchleimigeScreenshots.Core.csproj" />
   </ItemGroup>

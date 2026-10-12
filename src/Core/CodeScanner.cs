@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using ZXing;
 using ZXing.Common;
 using ZXing.Multi;
@@ -6,6 +7,15 @@ namespace SchleimigeScreenshots.Core;
 
 /// <summary>Ein erkannter Code samt ungefährer Position (Bildmitte des Codes, in Pixeln).</summary>
 public sealed record ScanResult(string Text, string Format, double X, double Y);
+
+/// <summary>Diagnose einer durchsuchten Bildregion (für den Debug-Bericht).</summary>
+public sealed record RegionDiagnostics(int X, int Y, int Width, int Height, int Hits, double Milliseconds, string? Error);
+
+/// <summary>Diagnose eines Suchdurchlaufs über alle Regionen.</summary>
+public sealed record PassDiagnostics(string Name, double Milliseconds, IReadOnlyList<RegionDiagnostics> Regions);
+
+/// <summary>Ergebnis eines Scans samt Diagnosedaten.</summary>
+public sealed record ScanOutcome(IReadOnlyList<ScanResult> Results, IReadOnlyList<PassDiagnostics> Passes, double Milliseconds);
 
 /// <summary>
 /// Erkennt QR-Codes, Barcodes usw. in einem BGRA-Bild. Das Bild wird als Ganzes sowie in
@@ -16,7 +26,11 @@ public static class CodeScanner
 {
     private readonly record struct Region(int X, int Y, int Width, int Height);
 
-    public static IReadOnlyList<ScanResult> Scan(byte[] bgra, int width, int height, CancellationToken ct = default)
+    public static IReadOnlyList<ScanResult> Scan(byte[] bgra, int width, int height, CancellationToken ct = default) =>
+        ScanDetailed(bgra, width, height, ct).Results;
+
+    /// <summary>Wie <see cref="Scan"/>, liefert aber zusätzlich Diagnosedaten (Regionen, Zeiten, Fehler).</summary>
+    public static ScanOutcome ScanDetailed(byte[] bgra, int width, int height, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(bgra);
         if (width <= 0 || height <= 0)
@@ -24,17 +38,20 @@ public static class CodeScanner
         if (bgra.Length < (long)width * height * 4)
             throw new ArgumentException("Pixeldaten sind kleiner als Breite*Höhe*4.", nameof(bgra));
 
+        var total = Stopwatch.StartNew();
         var source = new RGBLuminanceSource(bgra, width, height, RGBLuminanceSource.BitmapFormat.BGR32);
         var regions = BuildRegions(width, height);
+        var passes = new List<PassDiagnostics>();
 
-        var found = ScanRegions(source, regions, inverted: false, ct);
+        var found = RunPass("normal", source, regions, inverted: false, ct, passes);
         if (found.Count == 0)
-            found = ScanRegions(source, regions, inverted: true, ct); // helle Codes auf dunklem Grund (Dark Mode)
+            found = RunPass("invertiert", source, regions, inverted: true, ct, passes); // helle Codes auf dunklem Grund (Dark Mode)
 
-        return found
+        var ordered = found
             .OrderBy(r => Math.Round(r.Y / 40.0)) // grob zeilenweise, dann von links nach rechts
             .ThenBy(r => r.X)
             .ToList();
+        return new ScanOutcome(ordered, passes, total.Elapsed.TotalMilliseconds);
     }
 
     private static List<Region> BuildRegions(int w, int h)
@@ -59,9 +76,12 @@ public static class CodeScanner
         return list;
     }
 
-    private static List<ScanResult> ScanRegions(LuminanceSource source, List<Region> regions, bool inverted, CancellationToken ct)
+    private static List<ScanResult> RunPass(string name, LuminanceSource source, List<Region> regions, bool inverted,
+        CancellationToken ct, List<PassDiagnostics> passes)
     {
+        var passWatch = Stopwatch.StartNew();
         var results = new List<ScanResult>();
+        var diagnostics = new RegionDiagnostics[regions.Count]; // jeder Index wird nur von einem Thread geschrieben
         var gate = new object();
         var options = new ParallelOptions
         {
@@ -69,9 +89,13 @@ public static class CodeScanner
             MaxDegreeOfParallelism = Math.Clamp(Environment.ProcessorCount, 1, 8),
         };
 
-        Parallel.ForEach(regions, options, region =>
+        Parallel.For(0, regions.Count, options, index =>
         {
             ct.ThrowIfCancellationRequested();
+            var region = regions[index];
+            var watch = Stopwatch.StartNew();
+            int hits = 0;
+            string? error = null;
             try
             {
                 LuminanceSource src = region.Width == source.Width && region.Height == source.Height
@@ -84,24 +108,32 @@ public static class CodeScanner
                 var reader = new GenericMultipleBarcodeReader(new MultiFormatReader());
                 var hints = new Dictionary<DecodeHintType, object> { [DecodeHintType.TRY_HARDER] = true };
                 var decoded = reader.decodeMultiple(bitmap, hints);
-                if (decoded is null) return;
 
-                lock (gate)
+                if (decoded is not null)
                 {
-                    foreach (var r in decoded)
+                    lock (gate)
                     {
-                        if (string.IsNullOrEmpty(r.Text)) continue;
-                        var (cx, cy) = Center(r);
-                        results.Add(new ScanResult(r.Text, r.BarcodeFormat.ToString(), cx + region.X, cy + region.Y));
+                        foreach (var r in decoded)
+                        {
+                            if (string.IsNullOrEmpty(r.Text)) continue;
+                            var (cx, cy) = Center(r);
+                            results.Add(new ScanResult(r.Text, r.BarcodeFormat.ToString(), cx + region.X, cy + region.Y));
+                            hits++;
+                        }
                     }
                 }
             }
             catch (OperationCanceledException) { throw; }
-            catch
+            catch (Exception ex)
             {
-                // Eine fehlerhafte Region darf nie den ganzen Scan kippen.
+                // Eine fehlerhafte Region darf nie den ganzen Scan kippen – der Fehler landet im Debug-Bericht.
+                error = ex.ToString();
             }
+            diagnostics[index] = new RegionDiagnostics(region.X, region.Y, region.Width, region.Height, hits,
+                watch.Elapsed.TotalMilliseconds, error);
         });
+
+        passes.Add(new PassDiagnostics(name, passWatch.Elapsed.TotalMilliseconds, diagnostics));
 
         // Überlappende Kacheln liefern denselben Code mehrfach -> nach Format+Text entduplizieren.
         return results

@@ -1,0 +1,5 @@
+# Shell-Skripte und Docker-Dateien müssen LF behalten (sonst brechen sie bei Windows-Checkouts mit autocrlf)
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.ico binary
+*.png binary

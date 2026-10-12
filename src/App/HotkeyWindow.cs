@@ -7,6 +7,7 @@ namespace SchleimigeScreenshots;
 internal sealed class HotkeyWindow : NativeWindow, IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
+    private const int WM_CLOSE = 0x0010;
     private const uint MOD_NOREPEAT = 0x4000;
     private const int HotkeyId = 0x5153;
 
@@ -19,6 +20,9 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
     private bool _registered;
 
     public event Action? Pressed;
+
+    /// <summary>Das Fenster sollte geschlossen werden (z. B. Installer, Restart Manager, taskkill ohne /F).</summary>
+    public event Action? CloseRequested;
 
     public HotkeyWindow() => CreateHandle(new CreateParams());
 
@@ -54,6 +58,12 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
         {
             try { Pressed?.Invoke(); }
             catch (Exception ex) { Log.Error("Hotkey-Handler", ex); }
+            return;
+        }
+        if (m.Msg == WM_CLOSE)
+        {
+            try { CloseRequested?.Invoke(); }
+            catch (Exception ex) { Log.Error("Schließen-Handler", ex); }
             return;
         }
         base.WndProc(ref m);

@@ -11,12 +11,15 @@ internal sealed class SettingsForm : Form
     private readonly TextBox _template = new() { Dock = DockStyle.Fill };
     private readonly CheckBox _notify = new() { Text = "Benachrichtigung anzeigen", AutoSize = true };
     private readonly CheckBox _autostart = new() { Text = "Mit Windows starten", AutoSize = true };
+    private readonly CheckBox _debug = new() { Text = "Debug-Modus: nach jedem Scan einen kopierbaren Bericht zeigen", AutoSize = true };
+    private readonly AppSettings _original;
 
     public AppSettings Result { get; private set; }
     public bool AutoStartEnabled => _autostart.Checked;
 
     public SettingsForm(AppSettings current, bool autostart)
     {
+        _original = current;
         Result = current;
         Text = "Schleimige Screenshots – Einstellungen";
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -33,6 +36,7 @@ internal sealed class SettingsForm : Form
         _template.Text = current.SearchTemplate;
         _notify.Checked = current.ShowNotifications;
         _autostart.Checked = autostart;
+        _debug.Checked = current.DebugMode;
         _search.Enabled = _template.Enabled = _browser.Checked;
         _browser.CheckedChanged += (_, _) => _search.Enabled = _template.Enabled = _browser.Checked;
 
@@ -71,6 +75,7 @@ internal sealed class SettingsForm : Form
         Row("Suchadresse:", _template);
         Row(null, _notify);
         Row(null, _autostart);
+        Row(null, _debug);
         Row(null, buttons);
 
         Controls.Add(layout);
@@ -86,15 +91,15 @@ internal sealed class SettingsForm : Form
             || (u.Scheme != Uri.UriSchemeHttp && u.Scheme != Uri.UriSchemeHttps))
             template = WebTarget.DefaultSearchTemplate;
 
-        Result = new AppSettings
-        {
-            Hotkey = _hotkey.Gesture,
-            CopyToClipboard = _clipboard.Checked,
-            OpenInBrowser = _browser.Checked,
-            SearchNonUrls = _search.Checked,
-            SearchTemplate = template,
-            ShowNotifications = _notify.Checked,
-            MaxBrowserTabs = Result.MaxBrowserTabs,
-        };
+        // Klon des Originals: nicht im Dialog angezeigte Einstellungen (z. B. MaxBrowserTabs) bleiben erhalten.
+        var s = _original.Clone();
+        s.Hotkey = _hotkey.Gesture;
+        s.CopyToClipboard = _clipboard.Checked;
+        s.OpenInBrowser = _browser.Checked;
+        s.SearchNonUrls = _search.Checked;
+        s.SearchTemplate = template;
+        s.ShowNotifications = _notify.Checked;
+        s.DebugMode = _debug.Checked;
+        Result = s;
     }
 }

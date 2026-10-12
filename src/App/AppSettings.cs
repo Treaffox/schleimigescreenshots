@@ -12,6 +12,8 @@ public sealed class AppSettings
     public bool SearchNonUrls { get; set; } = true;
     public string SearchTemplate { get; set; } = WebTarget.DefaultSearchTemplate;
     public bool ShowNotifications { get; set; } = true;
+    /// <summary>Zeigt nach jedem Scan einen kopierbaren Bericht (Aufnahme, Erkennung, Aktionen, Fehler).</summary>
+    public bool DebugMode { get; set; }
     /// <summary>Schutz vor Tab-Flut, wenn viele Codes auf dem Bildschirm sind.</summary>
     public int MaxBrowserTabs { get; set; } = 5;
 
