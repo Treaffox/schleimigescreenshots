@@ -137,7 +137,7 @@ internal sealed class UpdateService : IDisposable
     /// Lädt das Update, prüft es und startet die Installation. Rückgabe null = Installation wurde gestartet, die App muss
     /// sich jetzt beenden; sonst der Fehlertext (die App läuft unverändert weiter).
     /// </summary>
-    public async Task<string?> InstallAsync(UpdateInfo update)
+    public async Task<string?> InstallAsync(UpdateInfo update, IProgress<double>? progress = null, Action? installing = null)
     {
         var kind = DetectInstallKind();
         var asset = kind == InstallKind.Setup ? update.Setup : update.Portable;
@@ -151,7 +151,7 @@ internal sealed class UpdateService : IDisposable
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromMinutes(10));
-            await UpdateDownloader.DownloadAsync(_http, asset, file, cts.Token);
+            await UpdateDownloader.DownloadAsync(_http, asset, file, cts.Token, progress);
             Log.Info($"Update {update.Tag} heruntergeladen und geprüft: {file}");
         }
         catch (Exception ex)
@@ -160,6 +160,7 @@ internal sealed class UpdateService : IDisposable
             return "Download fehlgeschlagen: " + (ex is OperationCanceledException ? "Zeitüberschreitung" : ex.Message);
         }
 
+        installing?.Invoke();
         try
         {
             if (kind == InstallKind.Setup) StartSetup(file);

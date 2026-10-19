@@ -162,7 +162,29 @@ internal sealed class TrayApplicationContext : ApplicationContext
         {
             Log.Info($"Installiere Update {update.Tag} ({UpdateService.DetectInstallKind()})");
             Notify($"Update auf {update.Version}", "Wird heruntergeladen und installiert – die App startet gleich neu.", ToolTipIcon.Info);
-            var error = await _updates.InstallAsync(update);
+            UpdateProgressForm? form = null;
+            if (interactive)
+            {
+                form = new UpdateProgressForm(update.Version.ToString());
+                form.Show();
+            }
+            string? error;
+            try
+            {
+                error = await _updates.InstallAsync(update,
+                    new Progress<double>(f => form?.SetDownload(f)),
+                    () =>
+                    {
+                        form?.SetInstalling();
+                        if (!interactive) Notify($"Update auf {update.Version}", "Heruntergeladen – die Installation läuft, die App startet gleich neu.", ToolTipIcon.Info);
+                    });
+                if (error is null && form is not null) await Task.Delay(3000); // Fenster kurz stehen lassen, bis das Setup läuft
+            }
+            finally
+            {
+                form?.Close();
+                form?.Dispose();
+            }
             if (error is null)
             {
                 Log.Info("Update gestartet – beende diese Instanz");
