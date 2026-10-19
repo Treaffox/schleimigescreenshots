@@ -12,6 +12,14 @@ public class TextUrlExtractorTests
     }
 
     [Fact]
+    public void Fixes_ocr_letter_for_zero_in_version_segment() =>
+        Assert.Equal(["https://github.com/a/b/releases/tag/v1.2.0"], TextUrlExtractor.Extract("ne: https://github.com/a/b/releases/tag/v1.2.O"));
+
+    [Fact]
+    public void Leaves_words_without_digits_alone() =>
+        Assert.Equal(["https://example.com/foo.lol"], TextUrlExtractor.Extract("https://example.com/foo.lol"));
+
+    [Fact]
     public void Plain_text_yields_nothing() =>
         Assert.Empty(TextUrlExtractor.Extract("Kein Link hier, nur Text 4006381333931 und datei.txt"));
 

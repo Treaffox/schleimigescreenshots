@@ -11,6 +11,7 @@
     <ApplicationIcon>app.ico</ApplicationIcon>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
     <InvariantGlobalization>false</InvariantGlobalization>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
@@ -22,8 +23,13 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="app.ico" LogicalName="app.ico" />
+    <!-- OCR-Modelle (PP-OCRv5) aus dem RapidOcrNet-Paket in die exe einbetten; beim ersten Scan nach %LocalAppData% entpackt. -->
+    <EmbeddedResource Include="$(NuGetPackageRoot)rapidocrnet/4.2.0/models/v5/*.*" LogicalName="ocr/%(Filename)%(Extension)" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Core\SchleimigeScreenshots.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="RapidOcrNet" Version="4.2.0" />
   </ItemGroup>
 </Project>

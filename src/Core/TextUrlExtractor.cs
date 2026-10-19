@@ -18,7 +18,7 @@ public static partial class TextUrlExtractor
         var found = new List<string>();
         foreach (Match m in UrlPattern().Matches(Normalize(text)))
         {
-            var candidate = TrimTrailing(m.Value);
+            var candidate = FixVersionSegments(TrimTrailing(m.Value));
             if (WebTarget.TryGetWebUri(candidate) is null) continue;
             if (!found.Contains(candidate, StringComparer.OrdinalIgnoreCase)) found.Add(candidate);
         }
@@ -31,6 +31,19 @@ public static partial class TextUrlExtractor
 
     [GeneratedRegex(@"((?:https?://|www\.)\S*[/\-_=&?])\n(?=\S)", RegexOptions.IgnoreCase)]
     private static partial Regex UrlBreakPattern();
+
+    /// <summary>OCR liest in Versionsnummern gern "O" statt "0" und "l" statt "1" (v1.2.O); in reinen Versions-/Zahlensegmenten des Pfads korrigieren.</summary>
+    private static string FixVersionSegments(string url)
+    {
+        int start = url.IndexOf("://", StringComparison.Ordinal);
+        int slash = url.IndexOf('/', start < 0 ? 0 : start + 3);
+        if (slash < 0) return url;
+        return url[..slash] + VersionSegmentPattern().Replace(url[slash..], mm =>
+            mm.Value.Any(char.IsAsciiDigit) ? mm.Value.Replace('O', '0').Replace('o', '0').Replace('l', '1').Replace('I', '1') : mm.Value);
+    }
+
+    [GeneratedRegex(@"(?<=/)v?[\dOolI]+(?:\.[\dOolI]+)+(?=$|[/?#])", RegexOptions.IgnoreCase)]
+    private static partial Regex VersionSegmentPattern();
 
     private static string TrimTrailing(string s) => s.TrimEnd('.', ',', ';', ':', '!', '?', ')', ']', '}', '>');
 }

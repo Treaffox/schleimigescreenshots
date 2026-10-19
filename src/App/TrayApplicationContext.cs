@@ -436,7 +436,8 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 return [];
             }
             var urls = TextUrlExtractor.Extract(text);
-            report.Line($"Texterkennung: {text.Length} Zeichen, {urls.Count} Webadresse(n), {watch.ElapsedMilliseconds} ms");
+            if (TextRecognizer.LastRapidError is { } rerr) report.Warn("RapidOCR fehlgeschlagen, Fallback auf Windows-OCR: " + rerr);
+            report.Line($"Texterkennung ({TextRecognizer.LastEngine}): {text.Length} Zeichen, {urls.Count} Webadresse(n), {watch.ElapsedMilliseconds} ms");
             return urls.Select(u => new ScanResult(u, "TEXT-URL", 0, 0)).ToList();
         }
         catch (OperationCanceledException)
