@@ -9,6 +9,7 @@ internal sealed class SettingsForm : Form
     private readonly CheckBox _clipboard = new() { Text = "Ergebnis in die Zwischenablage kopieren", AutoSize = true };
     private readonly CheckBox _browser = new() { Text = "Im Standardbrowser öffnen", AutoSize = true };
     private readonly CheckBox _search = new() { Text = "Kein Link (z. B. Barcode-Nummer): per Websuche öffnen", AutoSize = true };
+    private readonly CheckBox _textUrls = new() { Text = "Auch Webadressen im Text erkennen (nur Links, kein normaler Text)", AutoSize = true };
     private readonly TextBox _template = new() { Dock = DockStyle.Fill };
     private readonly CheckBox _notify = new() { Text = "Benachrichtigung anzeigen", AutoSize = true };
     private readonly CheckBox _autoCheckUpdates = new() { Text = "Automatisch nach Updates suchen (GitHub)", AutoSize = true };
@@ -38,6 +39,7 @@ internal sealed class SettingsForm : Form
         _clipboard.Checked = current.CopyToClipboard;
         _browser.Checked = current.OpenInBrowser;
         _search.Checked = current.SearchNonUrls;
+        _textUrls.Checked = current.RecognizeTextUrls;
         _template.Text = current.SearchTemplate;
         _notify.Checked = current.ShowNotifications;
         _autoCheckUpdates.Checked = current.AutoCheckUpdates;
@@ -82,6 +84,7 @@ internal sealed class SettingsForm : Form
         Row(null, _selectRegion);
         Row(null, _clipboard);
         Row(null, _browser);
+        Row(null, _textUrls);
         Row(null, _search);
         Row("Suchadresse:", _template);
         Row(null, _notify);
@@ -112,6 +115,7 @@ internal sealed class SettingsForm : Form
         s.CopyToClipboard = _clipboard.Checked;
         s.OpenInBrowser = _browser.Checked;
         s.SearchNonUrls = _search.Checked;
+        s.RecognizeTextUrls = _textUrls.Checked;
         s.SearchTemplate = template;
         s.ShowNotifications = _notify.Checked;
         s.AutoCheckUpdates = _autoCheckUpdates.Checked;

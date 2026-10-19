@@ -8,6 +8,8 @@ und Links im Standardbrowser.
 
 - Links (`http(s)://…`, `www.…`) werden direkt geöffnet; anderer Inhalt (z. B. EAN) per Websuche (abschaltbar, Suchadresse einstellbar).
   Es werden **nur http/https** geöffnet, maximal 5 Tabs pro Scan.
+- Findet die Suche keinen Code, liest die App den Text im Bild (Windows-OCR, lokal) und öffnet darin enthaltene **Webadressen**
+  (`http(s)://…`, `www.…`). Normaler Text wird ignoriert. Abschaltbar in den Einstellungen; braucht eine installierte Windows-OCR-Sprache.
 - Mehrere Codes gleichzeitig; Dark-Mode-Codes (invertiert); kleine und feine Codes; Mehrmonitor.
 - Keine Adminrechte: Einstellungen in `%AppData%\SchleimigeScreenshots\settings.json`, Log in `%LocalAppData%\SchleimigeScreenshots\log.txt`, Autostart über HKCU.
 - Automatische Updates über GitHub-Releases.

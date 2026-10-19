@@ -349,18 +349,28 @@ internal sealed class TrayApplicationContext : ApplicationContext
                 var outcome = await DetectAsync(shot);
                 DescribeDetection(report, outcome);
 
+                var results = outcome.Results;
+                var fromText = false;
+                if (results.Count == 0 && _settings.RecognizeTextUrls)
+                {
+                    report.Section("Texterkennung (nur Webadressen)");
+                    results = await DetectTextUrlsAsync(shot, report);
+                    fromText = results.Count > 0;
+                }
+
                 report.Section("Ergebnis");
-                if (outcome.Results.Count == 0)
+                if (results.Count == 0)
                 {
                     headline = "Kein Code gefunden";
                     body = selectRegion
-                        ? "Im gewählten Bereich wurde kein QR-Code oder Barcode erkannt."
-                        : "Auf dem Bildschirm wurde kein QR-Code oder Barcode erkannt.";
+                        ? "Im gewählten Bereich wurde kein QR-Code, Barcode oder Link erkannt."
+                        : "Auf dem Bildschirm wurde kein QR-Code, Barcode oder Link erkannt.";
                     report.Line("Kein Code gefunden.");
                 }
                 else
                 {
-                    (headline, body, icon) = Act(outcome.Results, report);
+                    (headline, body, icon) = Act(results, report);
+                    if (fromText) headline = results.Count == 1 ? "Link im Text erkannt" : $"{results.Count} Links im Text erkannt";
                 }
             }
         }
@@ -410,6 +420,36 @@ internal sealed class TrayApplicationContext : ApplicationContext
     {
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         return await Task.Run(() => CodeScanner.ScanDetailed(shot.Pixels, shot.Width, shot.Height, cts.Token));
+    }
+
+    /// <summary>Liest den Text im Bild (OCR) und behält ausschließlich Webadressen; sonstiger Text wird verworfen.</summary>
+    private static async Task<IReadOnlyList<ScanResult>> DetectTextUrlsAsync(CaptureResult shot, ScanReport report)
+    {
+        try
+        {
+            var watch = Stopwatch.StartNew();
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            var text = await TextRecognizer.RecognizeAsync(shot.Pixels, shot.Width, shot.Height, cts.Token);
+            if (text is null)
+            {
+                report.Warn("Texterkennung nicht verfügbar: Windows hat keine OCR-Sprache installiert (Einstellungen → Zeit & Sprache).");
+                return [];
+            }
+            var urls = TextUrlExtractor.Extract(text);
+            report.Line($"Texterkennung: {text.Length} Zeichen, {urls.Count} Webadresse(n), {watch.ElapsedMilliseconds} ms");
+            return urls.Select(u => new ScanResult(u, "TEXT-URL", 0, 0)).ToList();
+        }
+        catch (OperationCanceledException)
+        {
+            report.Warn("Texterkennung: Zeitüberschreitung (30 s).");
+            return [];
+        }
+        catch (Exception ex)
+        {
+            // OCR ist nur ein Zusatz; ein Fehler dort darf den normalen Ablauf nicht kippen.
+            report.Warn("Texterkennung fehlgeschlagen: " + ex.Message);
+            return [];
+        }
     }
 
     private async Task<Rectangle?> SelectRegionAsync(CaptureResult shot)

@@ -22,7 +22,7 @@ internal static class DebugInfo
             $"Sitzung: Remotedesktop={(SystemInformation.TerminalServerSession ? "ja" : "nein")} | Kultur={CultureInfo.CurrentUICulture.Name} " +
             $"| DPI-Modus: {DpiMode()}",
             $"Hotkey: {s.Hotkey} | Zwischenablage={Yn(s.CopyToClipboard)} | Browser={Yn(s.OpenInBrowser)} " +
-            $"| Websuche={Yn(s.SearchNonUrls)} | max. Tabs={s.MaxBrowserTabs} | Bereichsauswahl={Yn(s.SelectRegion)} | Debug-Modus={Yn(s.DebugMode)}",
+            $"| Websuche={Yn(s.SearchNonUrls)} | Text-Links={Yn(s.RecognizeTextUrls)} | max. Tabs={s.MaxBrowserTabs} | Bereichsauswahl={Yn(s.SelectRegion)} | Debug-Modus={Yn(s.DebugMode)}",
             $"Updates: automatisch prüfen={Yn(s.AutoCheckUpdates)} | automatisch installieren={Yn(s.AutoInstallUpdates)} " +
             $"| Vorabversionen={Yn(s.IncludePreReleases)} | Installation={UpdateService.DetectInstallKind()} | letzte Prüfung={(s.LastUpdateCheckUtc is { } t ? t.ToLocalTime().ToString("yyyy-MM-dd HH:mm") : "nie")}",
         };

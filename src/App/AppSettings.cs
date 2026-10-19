@@ -13,6 +13,8 @@ public sealed class AppSettings
     /// <summary>Text, der keine Webadresse ist (z. B. EAN), per Websuche öffnen.</summary>
     public bool SearchNonUrls { get; set; } = true;
     public string SearchTemplate { get; set; } = WebTarget.DefaultSearchTemplate;
+    /// <summary>Findet die Suche keinen Code, den Bildschirmtext lesen (OCR) und darin enthaltene Webadressen öffnen. Normaler Text wird ignoriert.</summary>
+    public bool RecognizeTextUrls { get; set; } = true;
     public bool ShowNotifications { get; set; } = true;
     /// <summary>Zeigt nach jedem Scan einen kopierbaren Bericht (Aufnahme, Erkennung, Aktionen, Fehler).</summary>
     public bool DebugMode { get; set; }
