@@ -59,6 +59,12 @@ public static class CodeScanner
             found = RunPass($"x{factor}", big, bigRegions, inverted: false, ct, passes, 1.0 / factor);
             if (found.Count == 0)
                 found = RunPass($"x{factor} invertiert", big, bigRegions, inverted: true, ct, passes, 1.0 / factor);
+
+            // Stark vergrößerter Text (Zeilen, Tabellen, Platinen) ergibt gern zufällige Strichcodes, die sogar die
+            // Prüfziffer bestehen (EAN-13: 1 von 10). Eindeutige 2D-Codes bleiben unangetastet, 1D-Treffer müssen
+            // bei einer anderen Vergrößerung noch einmal dieselbe Zahl liefern.
+            if (found.Any(r => !Is2D(r.Format)))
+                found = found.Where(r => Is2D(r.Format) || VerifyAtOtherScale(r, bgra, width, height, factor, ct, passes)).ToList();
         }
 
         var ordered = found
@@ -66,6 +72,26 @@ public static class CodeScanner
             .ThenBy(r => r.X)
             .ToList();
         return new ScanOutcome(ordered, passes, total.Elapsed.TotalMilliseconds);
+    }
+
+    private static bool Is2D(string format) =>
+        format is nameof(BarcodeFormat.QR_CODE) or nameof(BarcodeFormat.DATA_MATRIX) or nameof(BarcodeFormat.AZTEC) or nameof(BarcodeFormat.PDF_417)
+            or nameof(BarcodeFormat.MAXICODE);
+
+    private static bool VerifyAtOtherScale(ScanResult candidate, byte[] bgra, int width, int height, int usedFactor,
+        CancellationToken ct, List<PassDiagnostics> passes)
+    {
+        ct.ThrowIfCancellationRequested();
+        int factor = usedFactor == 2 ? 3 : 2;
+        var big = new RGBLuminanceSource(ImageOps.UpscaleLuminance(bgra, width, height, factor),
+            width * factor, height * factor, RGBLuminanceSource.BitmapFormat.Gray8);
+        var regions = BuildRegions(big.Width, big.Height, maxGrid: 2);
+        foreach (var inverted in new[] { false, true })
+        {
+            var again = RunPass($"x{factor} prüfen{(inverted ? " invertiert" : "")}", big, regions, inverted, ct, passes, 1.0 / factor);
+            if (again.Any(r => r.Format == candidate.Format && r.Text == candidate.Text)) return true;
+        }
+        return false;
     }
 
     /// <summary>Vergrößerungsfaktoren, die für ein Bild dieser Größe sinnvoll (und schnell genug) sind.</summary>
